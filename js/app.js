@@ -69,12 +69,14 @@ async function init() {
         if (first.toLowerCase() === 'admin') {
             isAdmin = true;
             currentUser = 'Admin Host';
+            localStorage.setItem('currentUser', currentUser);
             await showResults();
             return;
         }
 
         if (first) {
             currentUser = last ? `${first} ${last}` : first;
+            localStorage.setItem('currentUser', currentUser);
             await loadUserSession();
         }
     });
@@ -192,6 +194,7 @@ async function init() {
         currentUser = '';
         isAdmin = false;
         userRatings = {};
+        localStorage.removeItem('currentUser');
         firstnameInput.value = '';
         lastnameInput.value = '';
         
@@ -209,6 +212,18 @@ async function init() {
 
         showScreen('welcome');
     });
+
+    // Check for existing session
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+        currentUser = savedUser;
+        if (currentUser === 'Admin Host') {
+            isAdmin = true;
+            await showResults();
+        } else {
+            await loadUserSession();
+        }
+    }
 }
 
 function showScreen(screenId) {
