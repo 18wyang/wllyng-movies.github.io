@@ -341,6 +341,7 @@ async function showResults() {
         document.getElementById('edit-ratings-btn').style.display = 'none';
         
         document.getElementById('admin-panel').style.display = 'flex';
+        document.getElementById('view-participants-btn').style.display = 'block';
         document.getElementById('waiting-message').style.display = 'none';
         document.getElementById('admin-preview-panel').style.display = 'block';
         
@@ -403,6 +404,7 @@ function checkMatchRevealStatus() {
     const isRevealed = globalSettings.matchmaker_revealed;
     if (isRevealed && !isAdmin) {
         document.getElementById('waiting-message').style.display = 'none';
+        document.getElementById('edit-ratings-btn').style.display = 'none';
         
         const matches = globalSettings.final_matches;
         const myMatch = matches.find(m => m.uA.name === currentUser || m.uB.name === currentUser || (m.uC && m.uC.name === currentUser));
@@ -432,10 +434,13 @@ function checkMatchRevealStatus() {
              document.getElementById('view-match-btn').style.display = 'none';
         }
         matchPanel.style.display = 'block';
+        document.getElementById('view-participants-btn').style.display = 'block';
         
     } else if (!isAdmin) {
         document.getElementById('waiting-message').style.display = 'block';
         document.getElementById('active-match-panel').style.display = 'none';
+        document.getElementById('view-participants-btn').style.display = 'none';
+        document.getElementById('edit-ratings-btn').style.display = 'inline-block';
     }
 }
 
