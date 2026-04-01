@@ -549,3 +549,79 @@ input[type="text"]:focus {
 .delete-user-btn:hover {
     color: var(--accent-red);
 }
+
+/* --- Drag and Drop UI --- */
+.drag-movie-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.8rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    cursor: grab;
+    transition: background 0.2s, transform 0.1s;
+    user-select: none;
+}
+
+.drag-movie-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.drag-movie-card:active {
+    cursor: grabbing;
+}
+
+.drag-movie-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.drag-movie-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.drag-movie-year {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.drag-handle {
+    color: rgba(255, 255, 255, 0.3);
+    padding-right: 1rem;
+    font-size: 1.2rem;
+}
+
+/* SortableJS Classes */
+.sortable-ghost {
+    opacity: 0.4;
+    background: rgba(102, 252, 241, 0.2) !important;
+    border: 1px dashed var(--primary-color) !important;
+}
+
+.sortable-drag {
+    background: rgba(20, 20, 20, 0.95) !important;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+    transform: scale(1.02);
+}
+
+.remove-from-list-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 0.5rem;
+}
+
+.remove-from-list-btn:hover {
+    color: var(--accent-red);
+}
+
+#active-movie-zone .remove-from-list-btn {
+    display: none;
+}

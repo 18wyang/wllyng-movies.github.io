@@ -13,16 +13,15 @@ const loginForm = document.getElementById('login-form');
 const firstnameInput = document.getElementById('firstname-input');
 const lastnameInput = document.getElementById('lastname-input');
 
-// Rating Elements
-const titleDisplay = document.getElementById('movie-title-display');
-const yearDisplay = document.getElementById('movie-year-display');
-const posterBg = document.getElementById('poster-bg');
-const starsContainer = document.getElementById('stars-container');
-const starBtns = document.querySelectorAll('.star-btn');
+// Ranking Elements
+const rankedListEl = document.getElementById('ranked-list');
+const activeMovieZone = document.getElementById('active-movie-zone');
+const activeMoviePanel = document.getElementById('active-movie-panel');
+const unseenListEl = document.getElementById('unseen-list');
+const toggleUnseenBtn = document.getElementById('toggle-unseen-btn');
 const skipBtn = document.getElementById('skip-btn');
-const prevBtn = document.getElementById('prev-btn');
-const ratingProgress = document.getElementById('ranking-progress');
-const matchupCounter = document.getElementById('matchup-counter');
+const saveRankingsBtn = document.getElementById('save-rankings-btn');
+const rankCountDisplay = document.getElementById('rank-count');
 
 // Modal Elements
 const userModal = document.getElementById('user-modal');
@@ -33,24 +32,21 @@ const modalTierList = document.getElementById('modal-tier-list');
 // State
 let currentUser = '';
 let isAdmin = false;
-let moviePool = [];
-let currentMovieIndex = 0;
 let userRatings = {}; 
 
-// Shared state cache
 let globalUsers = [];
 let globalSettings = { matchmaker_revealed: false, final_matches: [] };
+
+let sortableRanked;
+let unratedPool = []; // Stack of movies yet to be seen
 
 // Initialize
 async function init() {
     showScreen('welcome');
-    moviePool = MOVIES; 
     
-    // Initial fetch from Supabase
     globalSettings = await api.getSettings();
     globalUsers = await api.getUsers();
     
-    // Populate Welcome screen matches if already revealed
     const logoutBtn = document.getElementById('global-logout-btn');
     logoutBtn.style.display = 'none';
         
@@ -66,7 +62,6 @@ async function init() {
         const first = firstnameInput.value.trim();
         const last = lastnameInput.value.trim();
         
-        // Let's force UI to loading state
         const startBtn = document.getElementById('start-btn');
         startBtn.textContent = 'Loading...';
         startBtn.disabled = true;
@@ -74,7 +69,7 @@ async function init() {
         if (first.toLowerCase() === 'admin') {
             isAdmin = true;
             currentUser = 'Admin Host';
-            await finishRating();
+            await showResults();
             return;
         }
 
@@ -84,21 +79,88 @@ async function init() {
         }
     });
 
-    setupStarInteractions();
-    
-    skipBtn.addEventListener('click', () => {
-        recordRating(null);
-    });
+    // Initialize Sequential Drag and Drop instances
+    if (window.Sortable) {
+        sortableRanked = new Sortable(rankedListEl, {
+            group: 'shared',
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            dragClass: 'sortable-drag',
+            onAdd: function (evt) {
+                // Instantly load next movie when dropped from the active zone
+                setTimeout(() => {
+                    loadNextMovie();
+                    syncAndSave();
+                }, 50);
+            },
+            onSort: () => {
+                updateRankCount();
+                syncAndSave();
+            }
+        });
 
-    prevBtn.addEventListener('click', () => {
-        if (currentMovieIndex > 0) {
-            currentMovieIndex--;
-            showCurrentMovie();
+        new Sortable(activeMovieZone, {
+            group: {
+                name: 'shared',
+                pull: true,
+                put: false // Items cannot be dropped back here
+            },
+            animation: 150,
+            sort: false, // Cannot sort within the single item
+            ghostClass: 'sortable-ghost',
+            dragClass: 'sortable-drag'
+        });
+    }
+
+    skipBtn.addEventListener('click', () => {
+        if (unratedPool.length > 0) {
+            const currentMovie = unratedPool[0];
+            
+            unseenListEl.insertAdjacentHTML('beforeend', createMovieCardHTML(currentMovie));
+            
+            activeMovieZone.innerHTML = ''; 
+            loadNextMovie();
+            syncAndSave();
         }
     });
 
+    document.querySelector('.draggable-container').addEventListener('click', (e) => {
+        const btn = e.target.closest('.remove-from-list-btn');
+        if (btn) {
+            const card = btn.closest('.drag-movie-card');
+            
+            if (card.parentElement.id === 'active-movie-zone') return;
+            
+            const movieId = card.dataset.id;
+            const movie = MOVIES.find(m => m.id === movieId);
+            if (movie) {
+                card.remove();
+                unratedPool.push(movie); 
+                updateRankCount();
+                syncAndSave();
+                
+                if (activeMoviePanel.style.display === 'none') {
+                    renderActiveMovie();
+                }
+            }
+        }
+    });
+
+    toggleUnseenBtn.addEventListener('click', () => {
+        if (unseenListEl.style.display === 'none') {
+            unseenListEl.style.display = 'flex';
+            toggleUnseenBtn.innerHTML = `<i class="fa-solid fa-eye"></i> Hide Haven't Seen It (${unseenListEl.children.length}) <i class="fa-solid fa-chevron-up" style="margin-left: 0.5rem;"></i>`;
+        } else {
+            unseenListEl.style.display = 'none';
+            toggleUnseenBtn.innerHTML = `<i class="fa-regular fa-eye-slash"></i> View Haven't Seen It (${unseenListEl.children.length}) <i class="fa-solid fa-chevron-down" style="margin-left: 0.5rem;"></i>`;
+        }
+    });
+    
+    saveRankingsBtn.addEventListener('click', async () => {
+        await finishRating();
+    });
+
     document.getElementById('edit-ratings-btn').addEventListener('click', () => {
-        currentMovieIndex = 0; 
         startRatingPhase();
     });
 
@@ -130,16 +192,13 @@ async function init() {
         currentUser = '';
         isAdmin = false;
         userRatings = {};
-        currentMovieIndex = 0;
         firstnameInput.value = '';
         lastnameInput.value = '';
         
-        // Reset button state
         const startBtn = document.getElementById('start-btn');
         startBtn.textContent = 'Continue';
         startBtn.disabled = false;
         
-        // Reload settings gracefully
         globalSettings = await api.getSettings();
         if (globalSettings.matchmaker_revealed) {
             document.getElementById('welcome-matches-container').style.display = 'block';
@@ -158,7 +217,6 @@ function showScreen(screenId) {
     });
     if(screens[screenId]) screens[screenId].classList.add('active');
     
-    // Toggle global logout button
     const logoutBtn = document.getElementById('global-logout-btn');
     if (screenId === 'welcome') {
         logoutBtn.style.display = 'none';
@@ -172,127 +230,150 @@ async function loadUserSession() {
     const existingUser = globalUsers.find(u => u.name.toLowerCase() === currentUser.toLowerCase());
     
     userRatings = {};
-    currentMovieIndex = 0;
 
     if (existingUser && existingUser.ratings) {
         userRatings = existingUser.ratings;
-        if (Object.keys(userRatings).length >= moviePool.length) {
-            finishRating();
+        if (Object.keys(userRatings).length >= MOVIES.length) {
+            await showResults();
             return;
-        } else {
-            const unratedIndex = moviePool.findIndex(m => userRatings[m.id] === undefined);
-            currentMovieIndex = unratedIndex >= 0 ? unratedIndex : 0;
         }
     }
     
     startRatingPhase();
 }
 
-// --- Rating Phase ---
+// --- Sequential Rating Phase ---
+function createMovieCardHTML(movie) {
+    return `
+        <div class="drag-movie-card" data-id="${movie.id}" style="width:100%; max-width: 400px; margin: 0 auto;">
+            <div class="drag-movie-info">
+                <span class="drag-movie-title">${movie.title}</span>
+                <span class="drag-movie-year">${movie.year}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap: 0.5rem;">
+                <button class="remove-from-list-btn" title="Return to Queue"><i class="fa-solid fa-times"></i></button>
+                <div class="drag-handle"><i class="fa-solid fa-grip-lines"></i></div>
+            </div>
+        </div>
+    `;
+}
+
 function startRatingPhase() {
     showScreen('rating');
-    showCurrentMovie();
-}
-
-function showCurrentMovie() {
-    if (currentMovieIndex >= moviePool.length) {
-        finishRating();
-        return;
-    }
-
-    const movie = moviePool[currentMovieIndex];
-    titleDisplay.textContent = movie.title;
-    yearDisplay.textContent = movie.year;
-    posterBg.style.background = `linear-gradient(135deg, ${movie.colors[0]}, ${movie.colors[1]})`;
     
-    if (currentMovieIndex > 0) {
-        prevBtn.style.opacity = '1';
-        prevBtn.style.pointerEvents = 'auto';
-    } else {
-        prevBtn.style.opacity = '0';
-        prevBtn.style.pointerEvents = 'none';
-    }
+    rankedListEl.innerHTML = '';
+    unseenListEl.innerHTML = '';
+    activeMovieZone.innerHTML = '';
+    
+    let ratedItems = [];
+    let unseenItems = [];
+    unratedPool = [];
 
-    const existingVal = userRatings[movie.id];
-    starBtns.forEach(btn => {
-        const rv = parseInt(btn.dataset.rating);
-        if (existingVal && rv <= existingVal) {
-            btn.classList.add('hover-active');
-        } else {
-            btn.classList.remove('hover-active');
+    MOVIES.forEach(movie => {
+        const val = userRatings[movie.id];
+        if (val !== undefined && val !== null) {
+            ratedItems.push({ movie, rank: val });
+        } else if (val === null) {
+            unseenItems.push(movie);
+        } else if (val === undefined) {
+            unratedPool.push(movie);
         }
-        btn.style.color = '';
     });
 
-    const pct = (currentMovieIndex / moviePool.length) * 100;
-    ratingProgress.style.width = `${pct}%`;
-    matchupCounter.textContent = `Movie ${currentMovieIndex + 1} of ${moviePool.length}`;
-}
+    // Randomize the incoming movie deck
+    unratedPool.sort(() => Math.random() - 0.5);
 
-function setupStarInteractions() {
-    starBtns.forEach(btn => {
-        btn.addEventListener('mouseenter', (e) => {
-            const ratingValue = parseInt(e.target.dataset.rating);
-            starBtns.forEach(b => {
-                if (parseInt(b.dataset.rating) <= ratingValue) {
-                    b.classList.add('hover-active');
-                } else {
-                    b.classList.remove('hover-active');
-                }
-            });
-        });
-
-        btn.addEventListener('mouseleave', () => {
-            const movie = moviePool[currentMovieIndex];
-            const existingVal = userRatings[movie.id];
-            starBtns.forEach(b => {
-                const rv = parseInt(b.dataset.rating);
-                if (existingVal && rv <= existingVal) {
-                    b.classList.add('hover-active');
-                } else {
-                    b.classList.remove('hover-active');
-                }
-            });
-        });
-
-        btn.addEventListener('click', (e) => {
-            const target = e.target.closest('.star-btn');
-            const ratingValue = parseInt(target.dataset.rating);
-            recordRating(ratingValue);
-        });
+    // Populate previously ranked list
+    ratedItems.sort((a, b) => a.rank - b.rank);
+    ratedItems.forEach(item => {
+        rankedListEl.insertAdjacentHTML('beforeend', createMovieCardHTML(item.movie));
     });
-}
-
-function recordRating(stars) {
-    const movie = moviePool[currentMovieIndex];
-    userRatings[movie.id] = stars;
     
-    document.getElementById('current-movie-card').style.transform = 'scale(0.95)';
-    setTimeout(() => {
-        document.getElementById('current-movie-card').style.transform = 'scale(1)';
-        currentMovieIndex++;
-        showCurrentMovie();
-    }, 150);
+    unseenItems.forEach(movie => {
+        unseenListEl.insertAdjacentHTML('beforeend', createMovieCardHTML(movie));
+    });
+    
+    updateRankCount();
+
+    if (unratedPool.length > 0) {
+        renderActiveMovie();
+    } else {
+        showFinishPhase();
+    }
+}
+
+function renderActiveMovie() {
+    activeMovieZone.innerHTML = ''; 
+    const movie = unratedPool[0];
+    activeMovieZone.innerHTML = createMovieCardHTML(movie);
+    
+    activeMoviePanel.style.display = 'flex';
+    saveRankingsBtn.style.display = 'none';
+}
+
+function loadNextMovie() {
+    unratedPool.shift(); 
+    updateRankCount();
+    
+    if (unratedPool.length > 0) {
+        renderActiveMovie();
+    } else {
+        showFinishPhase();
+    }
+}
+
+function showFinishPhase() {
+    activeMoviePanel.style.display = 'none';
+    saveRankingsBtn.style.display = 'block';
+}
+
+function updateRankCount() {
+    const listCount = rankedListEl.children.length;
+    rankCountDisplay.textContent = `${listCount} Sorted  (${unratedPool.length} left)`;
+    
+    if (unseenListEl.style.display === 'none') {
+        toggleUnseenBtn.innerHTML = `<i class="fa-regular fa-eye-slash"></i> View Haven't Seen It (${unseenListEl.children.length}) <i class="fa-solid fa-chevron-down" style="margin-left: 0.5rem;"></i>`;
+    } else {
+        toggleUnseenBtn.innerHTML = `<i class="fa-solid fa-eye"></i> Hide Haven't Seen It (${unseenListEl.children.length}) <i class="fa-solid fa-chevron-up" style="margin-left: 0.5rem;"></i>`;
+    }
+}
+
+function syncAndSave() {
+    userRatings = {};
+    
+    const rankedCards = Array.from(rankedListEl.children);
+    rankedCards.forEach((card, index) => {
+        userRatings[card.dataset.id] = index + 1;
+    });
+
+    const unseenCards = Array.from(unseenListEl.children);
+    unseenCards.forEach((card) => {
+        userRatings[card.dataset.id] = null;
+    });
+
+    api.saveUser(currentUser, userRatings).catch(console.error);
 }
 
 async function finishRating() {
-    if (!isAdmin) {
-        ratingProgress.style.width = `100%`;
-        matchupCounter.textContent = `Saving...`;
-        
-        await api.saveUser(currentUser, userRatings);
-        globalUsers = await api.getUsers();
-        
-        matchupCounter.textContent = `Finished!`;
-    }
+    saveRankingsBtn.textContent = 'Saving...';
+    saveRankingsBtn.disabled = true;
+
+    syncAndSave();
+    
+    await api.saveUser(currentUser, userRatings);
+    globalUsers = await api.getUsers();
+    
+    saveRankingsBtn.textContent = 'Finish & Save';
+    saveRankingsBtn.disabled = false;
+
     await showResults();
 }
 
 // --- Results Phase ---
 function generateSortedHtmlList(ratingsObj) {
     const sortedRated = Object.entries(ratingsObj)
-        .filter(([id, val]) => val !== null)
-        .sort((a, b) => b[1] - a[1]) 
+        .filter(([id, val]) => val !== null && val !== undefined)
+        .sort((a, b) => a[1] - b[1]) // ASC Rank (1 is top)
         .map(([id, val]) => {
             const m = MOVIES.find(x => x.id === id);
             return { ...m, rating: val };
@@ -306,10 +387,12 @@ function generateSortedHtmlList(ratingsObj) {
     
     if (sortedRated.length > 0) {
         sortedRated.forEach(movie => {
-            const starsHtml = '<i class="fa-solid fa-star" style="color:#f1c40f;font-size:0.75rem;margin-left:2px;"></i>'.repeat(movie.rating);
-            html += `<div class="list-item" style="padding:0.75rem; justify-content:space-between;">
-                <div><span style="font-weight:600;">${movie.title}</span> <span style="font-size:0.8rem;color:var(--text-secondary)">${movie.year}</span></div>
-                <div style="min-width: 60px; text-align:right;">${starsHtml}</div>
+            html += `<div class="list-item" style="padding:0.75rem; justify-content:flex-start; align-items:center; gap: 1rem;">
+                <div class="rank-number" style="font-size: 1.2rem; min-width: 40px; color: var(--primary-color); font-weight: bold;">#${movie.rating}</div>
+                <div>
+                    <span style="font-weight:600;">${movie.title}</span> 
+                    <span style="font-size:0.8rem;color:var(--text-secondary)">${movie.year}</span>
+                </div>
             </div>`;
         });
     }
@@ -345,7 +428,6 @@ async function showResults() {
         document.getElementById('waiting-message').style.display = 'none';
         document.getElementById('admin-preview-panel').style.display = 'block';
         
-        // Re-fetch settings for safety right before admin sees them
         globalSettings = await api.getSettings();
         
         const isRevealed = globalSettings.matchmaker_revealed;
@@ -374,7 +456,7 @@ async function showResults() {
 
         const clearBtn = document.getElementById('clear-users-btn');
         clearBtn.onclick = async () => {
-            if (confirm("Are you sure you want to clear ALL participant data and matches from the database?")) {
+             if (confirm("Are you sure you want to clear ALL participant data and matches from the database?")) {
                 await api.clearAllUsers();
                 await api.updateSettings(false, []);
                 globalSettings = await api.getSettings();
@@ -387,7 +469,7 @@ async function showResults() {
 
         if(window._previewInt) clearInterval(window._previewInt);
         await updateAdminPreview(); 
-        window._previewInt = setInterval(updateAdminPreview, 3000); // Backed off to 3s for API limits
+        window._previewInt = setInterval(updateAdminPreview, 3000); // Backed off for API limits
         
     } else {
         document.getElementById('edit-ratings-btn').style.display = 'inline-block';
@@ -423,9 +505,9 @@ function checkMatchRevealStatus() {
             document.getElementById('view-match-btn').onclick = () => openUserModal(partners[0]);
             
             if(partners.length > 1) {
-                 document.getElementById('view-match-btn').textContent = `View First Partner's Ratings`;
+                 document.getElementById('view-match-btn').textContent = `View First Partner's Rankings`;
             } else {
-                 document.getElementById('view-match-btn').textContent = `View Their Ratings`;
+                 document.getElementById('view-match-btn').textContent = `View Their Rankings`;
             }
             document.getElementById('view-match-btn').style.display = 'block';
         } else {
@@ -449,7 +531,7 @@ function pollForMatchReveal() {
     
     window._pollingInt = setInterval(async () => {
         globalSettings = await api.getSettings();
-        globalUsers = await api.getUsers(); // Allows us to see up-to-date participants stats
+        globalUsers = await api.getUsers(); 
         checkMatchRevealStatus();
     }, 3000);
 }
@@ -458,7 +540,6 @@ function pollForMatchReveal() {
 function showParticipantsScreen() {
     showScreen('participants');
     
-    // We already have globalUsers updated from polling or init
     const container = document.getElementById('participants-list');
     const displayCount = document.getElementById('participants-count');
     container.innerHTML = '';
@@ -479,7 +560,7 @@ function showParticipantsScreen() {
             <div class="list-item" style="justify-content:space-between; padding:1rem;">
                 <div style="flex:1; display:flex; justify-content:space-between; cursor:pointer;" class="clickable-name" onclick="window.viewUser('${user.name}')">
                     <span style="font-size:1.1rem; font-weight:600;">${user.name}</span>
-                    <span style="font-size:0.9rem; color:var(--text-secondary);">${ratedCount}/${MOVIES.length} rated</span>
+                    <span style="font-size:0.9rem; color:var(--text-secondary);">${ratedCount}/${MOVIES.length} ranked</span>
                 </div>
                 ${deleteHtml}
             </div>
@@ -497,11 +578,16 @@ function showParticipantsScreen() {
 }
 
 
-// --- Math: Rating Similarity ---
+// --- Math: Similarity via Percentile Ranking ---
 function calculateCompatibility(ratingsA, ratingsB) {
     let sharedMovies = 0;
-    let sumDiffs = 0;
-    let maxPossibleDiffs = 0;
+    let totalA = 0;
+    let totalB = 0;
+
+    for (const m of MOVIES) if (ratingsA[m.id] !== null && ratingsA[m.id] !== undefined) totalA++;
+    for (const m of MOVIES) if (ratingsB[m.id] !== null && ratingsB[m.id] !== undefined) totalB++;
+
+    let sumPercentileDiffs = 0;
     
     for (const movie of MOVIES) {
         const rA = ratingsA[movie.id];
@@ -509,9 +595,12 @@ function calculateCompatibility(ratingsA, ratingsB) {
         
         if (rA !== null && rA !== undefined && rB !== null && rB !== undefined) {
             sharedMovies++;
-            const diff = Math.abs(rA - rB);
-            sumDiffs += diff;
-            maxPossibleDiffs += 4;
+            
+            // Map 1-N rank to 0.0-1.0 Percentile (0.0 is best, 1.0 is worst)
+            const pctA = totalA > 1 ? (rA - 1) / (totalA - 1) : 0;
+            const pctB = totalB > 1 ? (rB - 1) / (totalB - 1) : 0;
+            
+            sumPercentileDiffs += Math.abs(pctA - pctB);
         }
     }
     
@@ -519,7 +608,8 @@ function calculateCompatibility(ratingsA, ratingsB) {
         return { score: 0, shared: 0 };
     }
     
-    let similarity = 1 - (sumDiffs / maxPossibleDiffs);
+    let avgDiff = sumPercentileDiffs / sharedMovies;
+    let similarity = 1 - avgDiff;
     
     const threshold = 10;
     if (sharedMovies < threshold) {
@@ -527,7 +617,7 @@ function calculateCompatibility(ratingsA, ratingsB) {
     }
     
     return {
-        score: Math.round(similarity * 100),
+        score: Math.max(0, Math.round(similarity * 100)),
         shared: sharedMovies
     };
 }
@@ -548,16 +638,14 @@ function computeMatches(allUsers) {
     let matchedUsers = new Set();
     let finalMatches = [];
     
-    // First Pass: 1-to-1 pairs
     for (const pair of pairsScores) {
         if (!matchedUsers.has(pair.uA.name) && !matchedUsers.has(pair.uB.name)) {
-            finalMatches.push({...pair}); // Clone to allow uC mutation safely
+            finalMatches.push({...pair});
             matchedUsers.add(pair.uA.name);
             matchedUsers.add(pair.uB.name);
         }
     }
 
-    // Second Pass: Odd person out (if exists) -> create trio
     if (matchedUsers.size < allUsers.length) {
         const leftoverUser = allUsers.find(u => !matchedUsers.has(u.name));
         if (leftoverUser && finalMatches.length > 0) {
@@ -633,13 +721,10 @@ function renderMatchesGrid(containerId, matches) {
     }
 }
 
-// --- Admin Live Preview ---
-let lastUserCount = -1;
 async function updateAdminPreview() {
     if (!isAdmin) return;
-    globalUsers = await api.getUsers(); // Fetch live database state
+    globalUsers = await api.getUsers(); 
     
-    // We update every ping to be safe incase someone alters ratings
     const container = document.getElementById('admin-matches-container');
     container.innerHTML = '';
     
@@ -652,12 +737,11 @@ async function updateAdminPreview() {
     renderMatchesGrid('admin-matches-container', finalMatches);
 }
 
-// --- User Profile Modal ---
 function openUserModal(name) {
     const user = globalUsers.find(u => u.name === name);
     
     if (user) {
-        modalUserName.textContent = `${user.name}'s Ratings`;
+        modalUserName.textContent = `${user.name}'s Rankings`;
         modalTierList.innerHTML = generateSortedHtmlList(user.ratings);
         
         userModal.style.display = 'flex';
@@ -666,19 +750,25 @@ function openUserModal(name) {
 }
 
 async function createMockUsers(count) {
-    const names = ['Emma', 'Liam', 'Olivia', 'Noah', 'Ava', 'Elijah', 'Isabella', 'James', 'Sophia', 'William', 'Mia', 'Benjamin', 'Charlotte', 'Lucas', 'Amelia', 'Henry'];
+    const names = ['Emma', 'Liam', 'Olivia', 'Charlotte', 'Ava', 'Elijah', 'Isabella', 'James', 'Sophia', 'William', 'Mia', 'Benjamin', 'Chloe', 'Lucas', 'Amelia', 'Henry'];
     
     let promises = [];
     for (let i = 0; i < count; i++) {
         const randName = `${names[Math.floor(Math.random() * names.length)]} ${Math.floor(Math.random()*1000)}`;
         let fakeRatings = {};
         
+        let seen = [];
         MOVIES.forEach(m => {
-            if (Math.random() > 0.2) {
-                fakeRatings[m.id] = Math.floor(Math.random() * 3) + 3;
+            if (Math.random() > 0.3) {
+                seen.push(m);
             } else {
                 fakeRatings[m.id] = null;
             }
+        });
+        
+        seen.sort(() => Math.random() - 0.5);
+        seen.forEach((m, index) => {
+            fakeRatings[m.id] = index + 1; // 1-indexed random ranking
         });
 
         promises.push(api.saveUser(randName, fakeRatings));

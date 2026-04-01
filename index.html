@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Styles -->
     <link rel="stylesheet" href="./css/style.css">
+    <!-- SortableJS -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 </head>
 <body>
     <div id="app-container" class="app-container">
@@ -48,39 +50,33 @@
 
         <!-- Screen 2: Rating Engine -->
         <section id="rating-screen" class="screen">
-            <header class="ranking-header">
-                <h2 id="rating-title">How many stars?</h2>
-                <div class="progress-bar-container">
-                    <div id="ranking-progress" class="progress-fill" style="width: 0%"></div>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                    <button id="prev-btn" class="nav-btn" style="opacity: 0; pointer-events: none;"><i class="fa-solid fa-chevron-left"></i> Back</button>
-                    <p id="matchup-counter" class="matchup-counter">Loading...</p>
-                    <button class="nav-btn" style="opacity: 0; pointer-events: none;">Next <i class="fa-solid fa-chevron-right"></i></button>
+            <header class="ranking-header" style="margin-bottom: 1rem; width: 100%; max-width: 600px;">
+                <h2 id="rating-title" style="font-size: 1.5rem;">Rank Your Movies</h2>
+                <div style="display:flex; justify-content:space-between; width:100%; margin-top:1.5rem;">
+                    <span id="rank-count" style="color:var(--text-secondary); font-size: 0.9rem; margin-top: auto;">0/30 Sorted</span>
+                    <button id="save-rankings-btn" class="btn-primary glow-btn" style="padding:0.6rem 1.5rem; display:none;">Finish & Save</button>
                 </div>
             </header>
 
-            <div class="rating-container" id="rating-container">
-                <!-- Single Movie Card -->
-                <div class="movie-card main-card" id="current-movie-card">
-                    <div class="poster-gradient" id="poster-bg"></div>
-                    <div class="movie-info">
-                        <h3 id="movie-title-display" class="movie-title">Movie Title</h3>
-                        <p id="movie-year-display" class="movie-year">2023</p>
-                    </div>
+            <div class="draggable-container" style="display: flex; flex-direction: column; gap: 2rem; width: 100%; max-width: 600px; margin: 0 auto; min-height: 60vh; padding: 1rem; padding-bottom: 4rem;">
+                
+                <div id="active-movie-panel" class="glass-panel" style="display: flex; flex-direction: column; align-items: center; padding: 1.5rem; border: 1px solid var(--primary-color); max-width: 100%;">
+                    <h3 style="color:var(--text-secondary); margin-bottom:1rem; text-align:center; font-size: 0.9rem; text-transform: uppercase;">Place This Movie</h3>
+                    <div id="active-movie-zone" class="sortable-list" style="width: 100%; min-height: 70px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); border-radius:10px;"></div>
+                    <button id="skip-btn" class="btn-secondary" style="margin-top: 1.5rem; width: 100%;"><i class="fa-regular fa-eye-slash"></i> Haven't Seen It</button>
                 </div>
 
-                <!-- Star Rating System -->
-                <div class="stars-container" id="stars-container">
-                    <button class="star-btn" data-rating="1" aria-label="1 Star"><i class="fa-solid fa-star"></i></button>
-                    <button class="star-btn" data-rating="2" aria-label="2 Stars"><i class="fa-solid fa-star"></i></button>
-                    <button class="star-btn" data-rating="3" aria-label="3 Stars"><i class="fa-solid fa-star"></i></button>
-                    <button class="star-btn" data-rating="4" aria-label="4 Stars"><i class="fa-solid fa-star"></i></button>
-                    <button class="star-btn" data-rating="5" aria-label="5 Stars"><i class="fa-solid fa-star"></i></button>
+                <div class="list-column">
+                    <h3 style="color:var(--primary-color); margin-bottom:0.5rem; text-align:center;">🏆 Your Tier List</h3>
+                    <p style="text-align:center; color:var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">Drag the movie above and drop it here.</p>
+                    <div id="ranked-list" class="sortable-list glass-panel" style="min-height: 300px; padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem; border: 1px solid rgba(255,255,255,0.1); max-width: 100%;"></div>
+                </div>
+
+                <div class="list-column" style="margin-top: 1rem;">
+                    <button id="toggle-unseen-btn" class="btn-secondary" style="width: 100%; margin-top: 0; padding: 0.75rem;"><i class="fa-regular fa-eye-slash"></i> View Haven't Seen It (0) <i class="fa-solid fa-chevron-down" style="margin-left: 0.5rem;"></i></button>
+                    <div id="unseen-list" class="glass-panel" style="display: none; min-height: 100px; padding: 1rem; border: 1px dashed rgba(255,255,255,0.2); flex-direction: column; gap: 0.5rem; opacity: 0.8; margin-top: 1rem; max-width: 100%;"></div>
                 </div>
             </div>
-            
-            <button id="skip-btn" class="btn-secondary"><i class="fa-regular fa-eye-slash"></i> Haven't Seen It</button>
         </section>
 
         <!-- Screen 3: Final Leaderboard & Waiting for Matches -->
