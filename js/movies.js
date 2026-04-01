@@ -1,0 +1,22 @@
+export const MOVIES = [
+    { id: 'eeaao', title: 'Everything Everywhere All at Once', year: '2022', colors: ['#ff4b4b', '#1f2833'] },
+    { id: 'spiderverse', title: 'Spider-Man: Into the Spider-Verse', year: '2018', colors: ['#f2132d', '#2c124a'] },
+    { id: 'endgame', title: 'Avengers: Endgame', year: '2019', colors: ['#6328a6', '#120f26'] },
+    { id: 'darkknight', title: 'The Dark Knight', year: '2008', colors: ['#1c2025', '#000000'] },
+    { id: 'getout', title: 'Get Out', year: '2017', colors: ['#2e4960', '#1c1c1c'] },
+    { id: 'inception', title: 'Inception', year: '2010', colors: ['#3e4f5a', '#101314'] },
+    { id: 'interstellar', title: 'Interstellar', year: '2014', colors: ['#192433', '#060a12'] },
+    { id: 'parasite', title: 'Parasite', year: '2019', colors: ['#3f4b3b', '#181f14'] },
+    { id: 'lalaland', title: 'La La Land', year: '2016', colors: ['#6947bc', '#151e42'] },
+    { id: 'wolfofwallstreet', title: 'The Wolf of Wall Street', year: '2013', colors: ['#dcb12d', '#222222'] },
+    { id: 'barbie', title: 'Barbie', year: '2023', colors: ['#e0218a', '#ff99cc'] },
+    { id: 'oppenheimer', title: 'Oppenheimer', year: '2023', colors: ['#d16630', '#1a1818'] },
+    { id: 'superbad', title: 'Superbad', year: '2007', colors: ['#1c4e80', '#142533'] },
+    { id: 'socialnetwork', title: 'The Social Network', year: '2010', colors: ['#0f3214', '#061a10'] },
+    { id: 'shrek2', title: 'Shrek 2', year: '2004', colors: ['#7bc02d', '#284615'] },
+    { id: 'knivesout', title: 'Knives Out', year: '2019', colors: ['#5c2e17', '#2e251b'] },
+    { id: 'dune', title: 'Dune', year: '2021', colors: ['#c97932', '#3e2412'] },
+    { id: 'ratatouille', title: 'Ratatouille', year: '2007', colors: ['#994132', '#301824'] },
+    { id: 'madmax', title: 'Mad Max: Fury Road', year: '2015', colors: ['#da6321', '#421a08'] },
+    { id: 'midsommar', title: 'Midsommar', year: '2019', colors: ['#e2c24e', '#597033'] }
+];

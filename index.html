@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Matchmaker | Rating System</title>
+    <meta name="description" content="Rate 20 classic movies and find your perfect movie match based on your taste.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Playfair+Display:ital,wght@0,600;1,600&display=swap" rel="stylesheet">
+    <!-- FontAwesome/Icons (CDN) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Styles -->
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div id="app-container" class="app-container">
+        
+        <!-- Global Logout Button -->
+        <button id="global-logout-btn" class="nav-btn" style="position: absolute; top: 1.5rem; right: 1.5rem; display: none; z-index: 1000; font-size: 0.8rem; border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 0.4rem 0.8rem; background: rgba(0,0,0,0.4); backdrop-filter: blur(5px);">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i> Back to Login
+        </button>
+
+        <!-- Screen 1: Welcome / Lobby -->
+        <section id="welcome-screen" class="screen active">
+            <header>
+                <h1 id="app-title" class="title">Movie Matchmaker</h1>
+                <p id="app-subtitle" class="subtitle">Rate 20 essential movies. Discover your cinematic soulmate.</p>
+            </header>
+            
+            <div id="welcome-matches-container" style="display: none; width: 100%; max-width: 800px; margin-bottom: 2rem;">
+                <h3 style="text-align:center; color:var(--primary-color); margin-bottom:1rem; text-transform:uppercase; font-size:0.9rem; letter-spacing:1px;">Official Match Results</h3>
+                <div class="matches-grid" id="welcome-matches-grid" style="gap:1rem;"></div>
+            </div>
+            
+            <div class="glass-panel" id="login-panel">
+                <form id="login-form">
+                    <p class="form-instruction">Enter your details to begin</p>
+                    <div class="input-group">
+                        <input type="text" id="firstname-input" placeholder="First Name" required autocomplete="off">
+                        <input type="text" id="lastname-input" placeholder="Last Name" autocomplete="off">
+                    </div>
+                    <button type="submit" id="start-btn" class="btn-primary">Continue</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Screen 2: Rating Engine -->
+        <section id="rating-screen" class="screen">
+            <header class="ranking-header">
+                <h2 id="rating-title">How many stars?</h2>
+                <div class="progress-bar-container">
+                    <div id="ranking-progress" class="progress-fill" style="width: 0%"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <button id="prev-btn" class="nav-btn" style="opacity: 0; pointer-events: none;"><i class="fa-solid fa-chevron-left"></i> Back</button>
+                    <p id="matchup-counter" class="matchup-counter">Movie 1 of 20</p>
+                    <button class="nav-btn" style="opacity: 0; pointer-events: none;">Next <i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+            </header>
+
+            <div class="rating-container" id="rating-container">
+                <!-- Single Movie Card -->
+                <div class="movie-card main-card" id="current-movie-card">
+                    <div class="poster-gradient" id="poster-bg"></div>
+                    <div class="movie-info">
+                        <h3 id="movie-title-display" class="movie-title">Movie Title</h3>
+                        <p id="movie-year-display" class="movie-year">2023</p>
+                    </div>
+                </div>
+
+                <!-- Star Rating System -->
+                <div class="stars-container" id="stars-container">
+                    <button class="star-btn" data-rating="1" aria-label="1 Star"><i class="fa-solid fa-star"></i></button>
+                    <button class="star-btn" data-rating="2" aria-label="2 Stars"><i class="fa-solid fa-star"></i></button>
+                    <button class="star-btn" data-rating="3" aria-label="3 Stars"><i class="fa-solid fa-star"></i></button>
+                    <button class="star-btn" data-rating="4" aria-label="4 Stars"><i class="fa-solid fa-star"></i></button>
+                    <button class="star-btn" data-rating="5" aria-label="5 Stars"><i class="fa-solid fa-star"></i></button>
+                </div>
+            </div>
+            
+            <button id="skip-btn" class="btn-secondary"><i class="fa-regular fa-eye-slash"></i> Haven't Seen It</button>
+        </section>
+
+        <!-- Screen 3: Final Leaderboard & Waiting for Matches -->
+        <section id="results-screen" class="screen">
+            <header>
+                <h2 id="results-title" class="title">Your Dashboard</h2>
+                <button id="edit-ratings-btn" class="btn-secondary" style="margin-top: 1rem; border-color: var(--primary-color); color: var(--primary-color);"><i class="fa-solid fa-pen"></i> Edit Ratings</button>
+            </header>
+
+            <div class="results-layout">
+                <!-- Match Display Area -->
+                <div id="active-match-panel" style="display: none; width: 100%;" class="glass-panel">
+                    <h3 style="color:var(--primary-color); text-align:center; margin-bottom: 0.5rem;" id="match-announcement">Your Match is...</h3>
+                    <p style="text-align:center; color:var(--text-secondary); margin-bottom: 1rem;" id="match-score">Similarity: --%</p>
+                    <button class="btn-primary" style="width:100%;" id="view-match-btn">View Their Ratings</button>
+                </div>
+
+                <div class="list-container glass-panel" id="user-tier-list">
+                    <!-- Javascript will inject list items here -->
+                </div>
+                
+                <div class="action-panel" id="admin-panel" style="display: none; width:100%; gap: 1rem; flex-direction: column;">
+                    <button id="match-everyone-btn" class="btn-primary glow-btn">Reveal Matches (On/Off)</button>
+                    <div style="display: flex; gap: 1rem; width: 100%;">
+                        <button id="simulate-users-btn" class="btn-secondary" style="flex: 1; margin:0;">Simulate 10 Random Users</button>
+                        <button id="clear-users-btn" class="btn-secondary" style="flex: 1; margin:0; border-color:var(--accent-red); color:var(--accent-red);"><i class="fa-solid fa-trash"></i> Clear All Data</button>
+                    </div>
+                </div>
+                
+                <!-- Admin Preview Panel -->
+                <div id="admin-preview-panel" style="display: none; width: 100%; margin-top: 2rem;">
+                    <h3 style="color:var(--text-secondary); text-align:center; margin-bottom: 1rem; text-transform:uppercase; font-size:0.9rem; letter-spacing:1px;">Live Preview (Hidden from Users)</h3>
+                    <div class="matches-grid" id="admin-matches-container" style="gap:1rem;"></div>
+                </div>
+
+                <div id="waiting-message" style="margin-top: 1rem; color: var(--text-secondary);">
+                    Waiting for the host to reveal the matches...
+                </div>
+
+                <button id="view-participants-btn" class="btn-secondary glow-btn" style="margin-top:2rem;">View All Participants</button>
+            </div>
+        </section>
+
+        <!-- Screen 4: Participants Directory -->
+        <section id="participants-screen" class="screen">
+            <header>
+                <h2 class="title">Participants</h2>
+                <p class="subtitle" id="participants-count" style="color:var(--primary-color); font-weight:600; margin-bottom: 0.5rem;"></p>
+                <p class="subtitle">Click on anyone to see their movie ratings.</p>
+            </header>
+
+            <div id="participants-matches-container" style="display: none; width: 100%; max-width: 500px; margin-bottom: 2rem;">
+                <h3 style="text-align:center; color:var(--text-secondary); margin-bottom:1rem; text-transform:uppercase; font-size:0.9rem; letter-spacing:1px;">Official Match Results</h3>
+                <div class="matches-grid" id="participants-matches-grid" style="gap:1rem;"></div>
+            </div>
+
+            <div class="list-container glass-panel" id="participants-list" style="max-width:500px; width:100%;">
+                <!-- Dynamic Participants injected here -->
+            </div>
+            
+            <button id="back-to-results-btn" class="btn-secondary mt-4"><i class="fa-solid fa-arrow-left"></i> Back to Dashboard</button>
+        </section>
+
+    </div>
+
+    <!-- User Profile Modal -->
+    <div id="user-modal" class="modal-overlay">
+        <div class="modal-content glass-panel">
+            <header>
+                <h2 id="modal-user-name" class="modal-title">User's Ratings</h2>
+                <button id="close-modal-btn" class="close-btn"><i class="fa-solid fa-times"></i></button>
+            </header>
+            <div class="list-container" id="modal-tier-list">
+                <!-- Javascript injects user's sorted ratings here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="./js/app.js"></script>
+</body>
+</html>
