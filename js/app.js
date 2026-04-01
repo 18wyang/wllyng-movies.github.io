@@ -1,4 +1,5 @@
 import { MOVIES } from './movies.js';
+import * as api from './api.js';
 
 // Elements
 const screens = {
@@ -36,26 +37,50 @@ let moviePool = [];
 let currentMovieIndex = 0;
 let userRatings = {}; 
 
+// Shared state cache
+let globalUsers = [];
+let globalSettings = { matchmaker_revealed: false, final_matches: [] };
+
 // Initialize
-function init() {
+async function init() {
     showScreen('welcome');
     moviePool = MOVIES; 
+    
+    // Initial fetch from Supabase
+    globalSettings = await api.getSettings();
+    globalUsers = await api.getUsers();
+    
+    // Populate Welcome screen matches if already revealed
+    const logoutBtn = document.getElementById('global-logout-btn');
+    logoutBtn.style.display = 'none';
+        
+    if (globalSettings.matchmaker_revealed) {
+        document.getElementById('welcome-matches-container').style.display = 'block';
+        renderMatchesGrid('welcome-matches-grid', globalSettings.final_matches);
+    } else {
+        document.getElementById('welcome-matches-container').style.display = 'none';
+    }
 
-    loginForm.addEventListener('submit', (e) => {
+    loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const first = firstnameInput.value.trim();
         const last = lastnameInput.value.trim();
         
+        // Let's force UI to loading state
+        const startBtn = document.getElementById('start-btn');
+        startBtn.textContent = 'Loading...';
+        startBtn.disabled = true;
+
         if (first.toLowerCase() === 'admin') {
             isAdmin = true;
             currentUser = 'Admin Host';
-            finishRating();
+            await finishRating();
             return;
         }
 
         if (first) {
             currentUser = last ? `${first} ${last}` : first;
-            loadUserSession();
+            await loadUserSession();
         }
     });
 
@@ -92,23 +117,37 @@ function init() {
 
     window.viewUser = openUserModal;
 
-    window.deleteParticipant = (name) => {
+    window.deleteParticipant = async (name) => {
         if (!isAdmin) return;
-        if (confirm(`Are you sure you want to delete ${name}'s data?`)) {
-            let allUsers = JSON.parse(localStorage.getItem('matchmaker_users') || '[]');
-            allUsers = allUsers.filter(u => u.name !== name);
-            localStorage.setItem('matchmaker_users', JSON.stringify(allUsers));
-            showParticipantsScreen(); 
+        if (confirm(`Are you sure you want to delete ${name}'s data? (This modifies the live database)`)) {
+            await api.deleteUser(name);
+            globalUsers = await api.getUsers();
+            showParticipantsScreen();
         }
     };
 
-    document.getElementById('global-logout-btn').addEventListener('click', () => {
+    document.getElementById('global-logout-btn').addEventListener('click', async () => {
         currentUser = '';
         isAdmin = false;
         userRatings = {};
         currentMovieIndex = 0;
         firstnameInput.value = '';
         lastnameInput.value = '';
+        
+        // Reset button state
+        const startBtn = document.getElementById('start-btn');
+        startBtn.textContent = 'Continue';
+        startBtn.disabled = false;
+        
+        // Reload settings gracefully
+        globalSettings = await api.getSettings();
+        if (globalSettings.matchmaker_revealed) {
+            document.getElementById('welcome-matches-container').style.display = 'block';
+            renderMatchesGrid('welcome-matches-grid', globalSettings.final_matches);
+        } else {
+            document.getElementById('welcome-matches-container').style.display = 'none';
+        }
+
         showScreen('welcome');
     });
 }
@@ -123,24 +162,14 @@ function showScreen(screenId) {
     const logoutBtn = document.getElementById('global-logout-btn');
     if (screenId === 'welcome') {
         logoutBtn.style.display = 'none';
-        
-        // Welcome Screen Matches Panel
-        const isRevealed = localStorage.getItem('matchmaker_revealed') === 'true';
-        if (isRevealed) {
-            const matches = JSON.parse(localStorage.getItem('matchmaker_final_matches') || '[]');
-            document.getElementById('welcome-matches-container').style.display = 'block';
-            renderMatchesGrid('welcome-matches-grid', matches);
-        } else {
-            document.getElementById('welcome-matches-container').style.display = 'none';
-        }
     } else {
         logoutBtn.style.display = 'block';
     }
 }
 
-function loadUserSession() {
-    const allUsers = JSON.parse(localStorage.getItem('matchmaker_users') || '[]');
-    const existingUser = allUsers.find(u => u.name.toLowerCase() === currentUser.toLowerCase());
+async function loadUserSession() {
+    globalUsers = await api.getUsers();
+    const existingUser = globalUsers.find(u => u.name.toLowerCase() === currentUser.toLowerCase());
     
     userRatings = {};
     currentMovieIndex = 0;
@@ -246,28 +275,17 @@ function recordRating(stars) {
     }, 150);
 }
 
-function finishRating() {
+async function finishRating() {
     if (!isAdmin) {
         ratingProgress.style.width = `100%`;
+        matchupCounter.textContent = `Saving...`;
+        
+        await api.saveUser(currentUser, userRatings);
+        globalUsers = await api.getUsers();
+        
         matchupCounter.textContent = `Finished!`;
-        
-        const allUsers = JSON.parse(localStorage.getItem('matchmaker_users') || '[]');
-        
-        const existingIndex = allUsers.findIndex(u => u.name.toLowerCase() === currentUser.toLowerCase());
-        const userData = {
-            name: currentUser,
-            ratings: userRatings
-        };
-        
-        if (existingIndex >= 0) {
-            allUsers[existingIndex] = userData;
-        } else {
-            allUsers.push(userData);
-        }
-        
-        localStorage.setItem('matchmaker_users', JSON.stringify(allUsers));
     }
-    showResults();
+    await showResults();
 }
 
 // --- Results Phase ---
@@ -310,7 +328,7 @@ function generateSortedHtmlList(ratingsObj) {
     return html;
 }
 
-function showResults() {
+async function showResults() {
     showScreen('results');
     
     const listContainer = document.getElementById('user-tier-list');
@@ -326,41 +344,49 @@ function showResults() {
         document.getElementById('waiting-message').style.display = 'none';
         document.getElementById('admin-preview-panel').style.display = 'block';
         
-        const isRevealed = localStorage.getItem('matchmaker_revealed') === 'true';
+        // Re-fetch settings for safety right before admin sees them
+        globalSettings = await api.getSettings();
+        
+        const isRevealed = globalSettings.matchmaker_revealed;
         const matchBtn = document.getElementById('match-everyone-btn');
         matchBtn.textContent = isRevealed ? "Hide Matches (Off)" : "Reveal Matches (On)";
         
-        matchBtn.onclick = () => {
-            if (localStorage.getItem('matchmaker_revealed') === 'true') {
-                localStorage.setItem('matchmaker_revealed', 'false');
+        matchBtn.onclick = async () => {
+            globalSettings = await api.getSettings();
+            if (globalSettings.matchmaker_revealed) {
+                await api.updateSettings(false, globalSettings.final_matches);
+                globalSettings.matchmaker_revealed = false;
                 matchBtn.textContent = "Reveal Matches (On)";
             } else {
-                generateMatches();
+                await generateMatches();
             }
         };
 
         const simulateBtn = document.getElementById('simulate-users-btn');
-        simulateBtn.onclick = () => {
-            createMockUsers(10);
-            setTimeout(updateAdminPreview, 100);
-            alert("10 random users added to the lobby!");
+        simulateBtn.onclick = async () => {
+            simulateBtn.textContent = "Simulating...";
+            await createMockUsers(10);
+            await updateAdminPreview();
+            simulateBtn.textContent = "Simulate 10 Random Users";
+            alert("10 random users added to the database!");
         };
 
         const clearBtn = document.getElementById('clear-users-btn');
-        clearBtn.onclick = () => {
-            if (confirm("Are you sure you want to clear ALL participant data and matches?")) {
-                localStorage.removeItem('matchmaker_users');
-                localStorage.removeItem('matchmaker_final_matches');
-                localStorage.setItem('matchmaker_revealed', 'false');
+        clearBtn.onclick = async () => {
+            if (confirm("Are you sure you want to clear ALL participant data and matches from the database?")) {
+                await api.clearAllUsers();
+                await api.updateSettings(false, []);
+                globalSettings = await api.getSettings();
+                globalUsers = [];
                 matchBtn.textContent = "Reveal Matches (On)";
-                updateAdminPreview();
-                alert("All data cleared.");
+                await updateAdminPreview();
+                alert("Database completely cleared.");
             }
         };
 
         if(window._previewInt) clearInterval(window._previewInt);
-        updateAdminPreview(); 
-        window._previewInt = setInterval(updateAdminPreview, 2000);
+        await updateAdminPreview(); 
+        window._previewInt = setInterval(updateAdminPreview, 3000); // Backed off to 3s for API limits
         
     } else {
         document.getElementById('edit-ratings-btn').style.display = 'inline-block';
@@ -374,11 +400,11 @@ function showResults() {
 }
 
 function checkMatchRevealStatus() {
-    const isRevealed = localStorage.getItem('matchmaker_revealed') === 'true';
+    const isRevealed = globalSettings.matchmaker_revealed;
     if (isRevealed && !isAdmin) {
         document.getElementById('waiting-message').style.display = 'none';
         
-        const matches = JSON.parse(localStorage.getItem('matchmaker_final_matches') || '[]');
+        const matches = globalSettings.final_matches;
         const myMatch = matches.find(m => m.uA.name === currentUser || m.uB.name === currentUser || (m.uC && m.uC.name === currentUser));
         
         const matchPanel = document.getElementById('active-match-panel');
@@ -396,7 +422,6 @@ function checkMatchRevealStatus() {
             
             if(partners.length > 1) {
                  document.getElementById('view-match-btn').textContent = `View First Partner's Ratings`;
-                 // Since they have 2 partners, maybe add a second button or clarify. A single modal is fine for MVP.
             } else {
                  document.getElementById('view-match-btn').textContent = `View Their Ratings`;
             }
@@ -417,27 +442,30 @@ function checkMatchRevealStatus() {
 function pollForMatchReveal() {
     if(window._pollingInt) clearInterval(window._pollingInt);
     
-    window._pollingInt = setInterval(() => {
+    window._pollingInt = setInterval(async () => {
+        globalSettings = await api.getSettings();
+        globalUsers = await api.getUsers(); // Allows us to see up-to-date participants stats
         checkMatchRevealStatus();
-    }, 2000);
+    }, 3000);
 }
 
 // --- Participants Directory ---
 function showParticipantsScreen() {
     showScreen('participants');
-    const allUsers = JSON.parse(localStorage.getItem('matchmaker_users') || '[]');
+    
+    // We already have globalUsers updated from polling or init
     const container = document.getElementById('participants-list');
     const displayCount = document.getElementById('participants-count');
     container.innerHTML = '';
     
-    displayCount.textContent = `Total Joined: ${allUsers.length}`;
+    displayCount.textContent = `Total Joined: ${globalUsers.length}`;
     
-    if (allUsers.length === 0) {
+    if (globalUsers.length === 0) {
         container.innerHTML = '<p style="text-align:center; padding:1rem;">No participants yet.</p>';
         return;
     }
     
-    allUsers.forEach(user => {
+    globalUsers.forEach(user => {
         const ratedCount = Object.values(user.ratings).filter(r => r !== null).length;
         
         const deleteHtml = isAdmin ? `<button class="delete-user-btn" onclick="window.deleteParticipant('${user.name}'); event.stopPropagation();" title="Remove User"><i class="fa-solid fa-times"></i></button>` : '';
@@ -446,16 +474,16 @@ function showParticipantsScreen() {
             <div class="list-item" style="justify-content:space-between; padding:1rem;">
                 <div style="flex:1; display:flex; justify-content:space-between; cursor:pointer;" class="clickable-name" onclick="window.viewUser('${user.name}')">
                     <span style="font-size:1.1rem; font-weight:600;">${user.name}</span>
-                    <span style="font-size:0.9rem; color:var(--text-secondary);">${ratedCount}/20 rated</span>
+                    <span style="font-size:0.9rem; color:var(--text-secondary);">${ratedCount}/${MOVIES.length} rated</span>
                 </div>
                 ${deleteHtml}
             </div>
         `;
     });
 
-    const isRevealed = localStorage.getItem('matchmaker_revealed') === 'true';
+    const isRevealed = globalSettings.matchmaker_revealed;
     if (isRevealed) {
-        const matches = JSON.parse(localStorage.getItem('matchmaker_final_matches') || '[]');
+        const matches = globalSettings.final_matches;
         document.getElementById('participants-matches-container').style.display = 'block';
         renderMatchesGrid('participants-matches-grid', matches);
     } else {
@@ -536,7 +564,6 @@ function computeMatches(allUsers) {
                 const compA = calculateCompatibility(leftoverUser.ratings, pair.uA.ratings);
                 const compB = calculateCompatibility(leftoverUser.ratings, pair.uB.ratings);
                 
-                // Weights compatibility equally between the existing two
                 const avgScore = (compA.score + compB.score) / 2;
                 
                 if (avgScore > bestAvgScore) {
@@ -546,7 +573,6 @@ function computeMatches(allUsers) {
             }
             
             finalMatches[bestPairIndex].uC = leftoverUser;
-            // Slightly recalculate the composite score for the UI
             finalMatches[bestPairIndex].score = Math.round((finalMatches[bestPairIndex].score + bestAvgScore) / 2);
         }
     }
@@ -554,17 +580,17 @@ function computeMatches(allUsers) {
     return finalMatches;
 }
 
-function generateMatches() {
-    const allUsers = JSON.parse(localStorage.getItem('matchmaker_users') || '[]');
-    if (allUsers.length < 2) {
+async function generateMatches() {
+    globalUsers = await api.getUsers();
+    if (globalUsers.length < 2) {
         alert("Not enough people have joined to create matches.");
         return;
     }
 
-    const finalMatches = computeMatches(allUsers);
+    const finalMatches = computeMatches(globalUsers);
 
-    localStorage.setItem('matchmaker_final_matches', JSON.stringify(finalMatches));
-    localStorage.setItem('matchmaker_revealed', 'true');
+    await api.updateSettings(true, finalMatches);
+    globalSettings = await api.getSettings();
     
     const matchBtn = document.getElementById('match-everyone-btn');
     matchBtn.textContent = "Hide Matches (Off)";
@@ -572,7 +598,6 @@ function generateMatches() {
     alert("Matches generated and revealed to all active users!");
 }
 
-// --- Admin Live Preview ---
 function renderMatchesGrid(containerId, matches) {
     const container = document.getElementById(containerId);
     container.innerHTML = '';
@@ -605,29 +630,26 @@ function renderMatchesGrid(containerId, matches) {
 
 // --- Admin Live Preview ---
 let lastUserCount = -1;
-function updateAdminPreview() {
+async function updateAdminPreview() {
     if (!isAdmin) return;
-    const allUsers = JSON.parse(localStorage.getItem('matchmaker_users') || '[]');
+    globalUsers = await api.getUsers(); // Fetch live database state
     
-    if (allUsers.length === lastUserCount) return;
-    lastUserCount = allUsers.length;
-
+    // We update every ping to be safe incase someone alters ratings
     const container = document.getElementById('admin-matches-container');
     container.innerHTML = '';
     
-    if (allUsers.length < 2) {
+    if (globalUsers.length < 2) {
         container.innerHTML = '<p style="text-align:center; color:var(--text-secondary); width: 100%;">Not enough users to preview matches.</p>';
         return;
     }
 
-    const finalMatches = computeMatches(allUsers);
+    const finalMatches = computeMatches(globalUsers);
     renderMatchesGrid('admin-matches-container', finalMatches);
 }
 
 // --- User Profile Modal ---
 function openUserModal(name) {
-    const allUsers = JSON.parse(localStorage.getItem('matchmaker_users') || '[]');
-    const user = allUsers.find(u => u.name === name);
+    const user = globalUsers.find(u => u.name === name);
     
     if (user) {
         modalUserName.textContent = `${user.name}'s Ratings`;
@@ -638,31 +660,26 @@ function openUserModal(name) {
     }
 }
 
-function createMockUsers(count) {
-    const allUsers = JSON.parse(localStorage.getItem('matchmaker_users') || '[]');
+async function createMockUsers(count) {
     const names = ['Emma', 'Liam', 'Olivia', 'Noah', 'Ava', 'Elijah', 'Isabella', 'James', 'Sophia', 'William', 'Mia', 'Benjamin', 'Charlotte', 'Lucas', 'Amelia', 'Henry'];
     
+    let promises = [];
     for (let i = 0; i < count; i++) {
         const randName = `${names[Math.floor(Math.random() * names.length)]} ${Math.floor(Math.random()*1000)}`;
         let fakeRatings = {};
         
         MOVIES.forEach(m => {
-            // 80% chance they saw it
             if (Math.random() > 0.2) {
-                // Bias towards 3-5 stars
                 fakeRatings[m.id] = Math.floor(Math.random() * 3) + 3;
             } else {
                 fakeRatings[m.id] = null;
             }
         });
 
-        allUsers.push({
-            name: randName,
-            ratings: fakeRatings
-        });
+        promises.push(api.saveUser(randName, fakeRatings));
     }
     
-    localStorage.setItem('matchmaker_users', JSON.stringify(allUsers));
+    await Promise.all(promises);
 }
 
 // Boot up

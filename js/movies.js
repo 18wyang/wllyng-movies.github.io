@@ -18,5 +18,15 @@ export const MOVIES = [
     { id: 'dune', title: 'Dune', year: '2021', colors: ['#c97932', '#3e2412'] },
     { id: 'ratatouille', title: 'Ratatouille', year: '2007', colors: ['#994132', '#301824'] },
     { id: 'madmax', title: 'Mad Max: Fury Road', year: '2015', colors: ['#da6321', '#421a08'] },
-    { id: 'midsommar', title: 'Midsommar', year: '2019', colors: ['#e2c24e', '#597033'] }
+    { id: 'tangled', title: 'Tangled', year: '2010', colors: ['#c383d4', '#4b1d6e'] },
+    { id: 'lionking', title: 'The Lion King', year: '1994', colors: ['#e58b32', '#69250b'] },
+    { id: 'lesmiserables', title: 'Les Misérables', year: '2012', colors: ['#284e8b', '#0f1a2d'] },
+    { id: 'wicked', title: 'Wicked', year: '2024', colors: ['#59c97b', '#184f29'] },
+    { id: 'frozen', title: 'Frozen', year: '2013', colors: ['#63d2e1', '#174061'] },
+    { id: 'mulan', title: 'Mulan', year: '1998', colors: ['#c63b4b', '#481d26'] },
+    { id: 'greatestshowman', title: 'The Greatest Showman', year: '2017', colors: ['#e43152', '#2f2343'] },
+    { id: 'highschoolmusical', title: 'High School Musical', year: '2006', colors: ['#e92c34', '#cd9710'] },
+    { id: 'meangirls', title: 'Mean Girls', year: '2004', colors: ['#f47cc3', '#c62780'] },
+    { id: 'insideout', title: 'Inside Out', year: '2015', colors: ['#fcd04c', '#216aa2'] },
+    { id: 'zootopia', title: 'Zootopia', year: '2016', colors: ['#ffc86d', '#3ea77a'] }
 ];
